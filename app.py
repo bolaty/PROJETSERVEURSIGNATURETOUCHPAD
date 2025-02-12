@@ -137,6 +137,6 @@ app.register_blueprint(api_bp, url_prefix='/api')
 
 # Exécution du serveur
 if __name__ == '__main__':
-    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', os.environ.get('PORT_NUMBER'))), app)
+    eventlet.wsgi.server(eventlet.listen(('0.0.0.0', int(os.environ.get('PORT_NUMBER')))), app)
     #eventlet.wsgi.server(eventlet.listen(('192.168.1.12', 6001)), app)
     #socketio.run(app, host="0.0.0.0", port=6001, debug=True, allow_unsafe_werkzeug=True)
