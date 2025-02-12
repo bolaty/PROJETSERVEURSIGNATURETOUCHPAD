@@ -13,7 +13,7 @@ api_bp = Blueprint('api', __name__)
 
 
 ################################################################
-#                  GESTION SIGNATURE                           #
+#                  GESTION DES SIGNATURES                      #
 ################################################################
 
 @api_bp.route('insertion_signaturepad', methods=['POST'])
