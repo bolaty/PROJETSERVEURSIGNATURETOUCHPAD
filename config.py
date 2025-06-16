@@ -12,4 +12,4 @@ CODECRYPTAGE=os.environ.get('CODECRYPTAGE')
 connected_cashiers = {}
 socketio  = {}
 LIENCLIENT='http://localhost:4200/'
-
+#//VERSION STABLE GLOBALE DEFINIE DU 16/06/2025 POUT TOUS LES CLIENTS 
