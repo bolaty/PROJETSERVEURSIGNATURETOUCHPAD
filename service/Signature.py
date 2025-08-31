@@ -380,15 +380,20 @@ def IsValidateIP(ipaddress):
     if "https://" in ipaddress:
         ipaddress = ipaddress.replace("https://", "")
 
-    adresse = ipaddress.split(':')
+    #adresse = ipaddress.split(':')
+    adresse = ipaddress
+    
+    if len(adresse) == "":
+       return ValidateIP
+    
+    #if len(adresse) != 2:
+    #     return ValidateIP
 
-    if len(adresse) != 2:
-        return ValidateIP
+    #HostURI = adresse[0]
+    #PortNumber = adresse[1].replace("/", "")
 
-    HostURI = adresse[0]
-    PortNumber = adresse[1].replace("/", "")
-
-    ValidateIP = PingHost(HostURI, int(PortNumber))
+    #ValidateIP = PingHost(HostURI, int(PortNumber))
+    ValidateIP = True
     return ValidateIP    
  
 def PingHost(host, port):

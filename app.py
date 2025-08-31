@@ -23,6 +23,114 @@ CORS(app)  # Activation du CORS
 socketio = SocketIO(app, cors_allowed_origins="*",async_mode="eventlet")
 
 # Quand une caissière se connecte au WebSocket
+
+# Structures de données globales
+connected_cashiers = {}  # {app_id: {cashier_id: sid}}
+sid_to_cashier = {}      # {sid: {'app_id': app_id, 'cashier_id': cashier_id}}
+
+@socketio.on('connect_cashier')
+def handle_connect_cashier(data):
+    app_id = data.get('APP_ID')
+    cashier_id = data.get('OP_CODEOPERATEUR')
+
+    if not app_id or not cashier_id:
+        logger.warning("Connexion invalide : APP_ID ou OP_CODEOPERATEUR manquant")
+        return
+
+    # Initialiser l'application si pas encore dans connected_cashiers
+    if app_id not in connected_cashiers:
+        connected_cashiers[app_id] = {}
+
+    # Ajouter la caissière
+    connected_cashiers[app_id][cashier_id] = request.sid
+    sid_to_cashier[request.sid] = {'app_id': app_id, 'cashier_id': cashier_id}
+
+    logger.debug(f"Caissière connectée: {cashier_id} (App: {app_id}) avec SID: {request.sid}")
+
+    emit('status', {
+        'message': f'Caissière connectée à {app_id}',
+        'connected_count': len(connected_cashiers[app_id]),
+        'connected_countTontineWeb': len(connected_cashiers.get('TONTINEWEB', {})),
+        'connected_countZenithMobile': len(connected_cashiers.get('ZENITHMOBILE', {})),
+        'connected_countTontineMobile': len(connected_cashiers.get('TONTINEMOBILE', {})),
+        'connected_countGlobale': sum(len(app) for app in connected_cashiers.values()),
+        'cashier_id': cashier_id,
+        'app_id': app_id
+    }, broadcast=True)
+
+@socketio.on('disconnect_cashier')
+def handle_disconnect_cashier(data):
+    app_id = data.get('APP_ID')
+    cashier_id = data.get('OP_CODEOPERATEUR')
+    
+    if not app_id or not cashier_id:
+        logger.warning("Déconnexion invalide : APP_ID ou OP_CODEOPERATEUR manquant")
+        return
+    
+    # Vérifier et supprimer la caissière spécifique
+    if (app_id in connected_cashiers and 
+        cashier_id in connected_cashiers[app_id]):
+        
+        sid = connected_cashiers[app_id][cashier_id]
+        
+        # Supprimer des deux structures
+        del connected_cashiers[app_id][cashier_id]
+        if sid in sid_to_cashier:
+            del sid_to_cashier[sid]
+        
+        # Supprimer l'application si elle est vide
+        if not connected_cashiers[app_id]:
+            del connected_cashiers[app_id]
+        
+        logger.debug(f"Caissière déconnectée via événement: {cashier_id} de {app_id}")
+        
+        emit('status', {
+            'message': f'Caissière déconnectée de {app_id}',
+            'connected_count': len(connected_cashiers.get(app_id, {})),
+            'connected_countTontineWeb': len(connected_cashiers.get('TONTINEWEB', {})),
+            'connected_countZenithMobile': len(connected_cashiers.get('ZENITHMOBILE', {})),
+            'connected_countTontineMobile': len(connected_cashiers.get('TONTINEMOBILE', {})),
+            'connected_countGlobale': sum(len(app) for app in connected_cashiers.values()),
+            'cashier_id': cashier_id,
+            'app_id': app_id
+        }, broadcast=True)
+
+@socketio.on('disconnect')
+def handle_automatic_disconnect():
+    sid = request.sid
+    
+    if sid in sid_to_cashier:
+        cashier_info = sid_to_cashier[sid]
+        app_id = cashier_info['app_id']
+        cashier_id = cashier_info['cashier_id']
+        
+        # Supprimer des deux structures
+        if app_id in connected_cashiers and cashier_id in connected_cashiers[app_id]:
+            del connected_cashiers[app_id][cashier_id]
+            
+            # Supprimer l'application si vide
+            if not connected_cashiers[app_id]:
+                del connected_cashiers[app_id]
+        
+        del sid_to_cashier[sid]
+        
+        logger.debug(f"Caissière déconnectée automatiquement: {cashier_id} de {app_id}")
+        
+        emit('status', {
+            'message': f'Caissière déconnectée de {app_id}',
+            'connected_count': len(connected_cashiers.get(app_id, {})),
+            'connected_countTontineWeb': len(connected_cashiers.get('TONTINEWEB', {})),
+            'connected_countZenithMobile': len(connected_cashiers.get('ZENITHMOBILE', {})),
+            'connected_countTontineMobile': len(connected_cashiers.get('TONTINEMOBILE', {})),
+            'connected_countGlobale': sum(len(app) for app in connected_cashiers.values()),
+            'cashier_id': cashier_id,
+            'app_id': app_id
+        }, broadcast=True)
+
+
+
+'''
+avant le 31/08/2025
 @socketio.on('connect_cashier')
 def handle_connect_cashier(data):
     cashier_id = data.get('OP_CODEOPERATEUR')
@@ -32,7 +140,7 @@ def handle_connect_cashier(data):
         emit('status', {'message': 'Caissière connectée', 'cashier_id': cashier_id}, broadcast=True)
     else:
         logger.warning("Tentative de connexion sans OP_CODEOPERATEUR")
-
+'''
 # Quand une caissière se déconnecte
 '''
 @socketio.on('disconnect')
@@ -99,9 +207,18 @@ def handle_signature(data):
                 
                 
                 mise_a_jour_signaturepad(db_connection, signature_info)
+            
+            cashier_id = signature_info['OP_CODEOPERATEUR']
+            app_id = "ZENITHWEB"   # L'application d'origine de la signature
+
+            if app_id in connected_cashiers and cashier_id in connected_cashiers[app_id]:
+                cashier_sid = connected_cashiers[app_id][cashier_id]
+                logger.debug(f"Envoi de la signature à la caissière {cashier_id} (App: {app_id}) avec SID: {cashier_sid}")
+                emit('receive_signature', signature_info, room=cashier_sid)
+            else:
+                logger.warning(f"Caissière {cashier_id} non connectée dans l'application {app_id}, impossible d'envoyer la signature")    
                 
-                
-                
+            '''    
             cashier_id = signature_info['OP_CODEOPERATEUR']
 
             if cashier_id in connected_cashiers:
@@ -110,8 +227,8 @@ def handle_signature(data):
                 emit('receive_signature', signature_info, room=cashier_sid)
             else:
                 logger.warning(f"Caissière {cashier_id} non connectée, impossible d'envoyer la signature")
-        
-    except Exception as e:
+            '''
+    except Exception as e: 
             db_connection.rollback()
             return  jsonify({'message': str(e), 'cashier_id': signature_info['OP_CODEOPERATEUR']})
         
